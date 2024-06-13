@@ -8,7 +8,7 @@ setup(
         'pyproj',
         'rasterio',
         'geopandas',
-        
+        'shapely'
     ],
     entry_points={
         'console_scripts': [
