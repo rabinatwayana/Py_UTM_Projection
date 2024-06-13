@@ -27,7 +27,6 @@ def bbox_from_utm_epsg(epsg_code):
         min_lat = 0 if northern_hemisphere else -80
         max_lat = 84 if northern_hemisphere else 0
         bbox=(min_lon, min_lat, max_lon, max_lat)
-        
         return bbox
     except Exception as e:
         return f"Error in  bbox_from_utm_epsg {str(e)}"
@@ -69,7 +68,7 @@ def check_utm_epsg(epsg_code):
         return False
 
 
-def utm_epsg_finder(src_crs,bbox=[]):
+def utm_epsg_finder(src_crs,bbox):
     """
     Find the UTM EPSG code for the given CRS and bounding box.
     """
@@ -107,22 +106,64 @@ def utm_epsg_finder(src_crs,bbox=[]):
         return False, str(e), None
     
 
-def raster_projection(file_path, out_path):
+def utm_epsg_finder_from_file(file_path):
+    """
+    Find the UTM EPSG code for the given CRS and bounding box.
+    """
+    try:
+        """
+        Find UTM epsg
+        raster: input raster path
+        Returns:
+        UTM EPSG code of the input raster
+        """
+        try:
+           
+            gdf = gpd.read_file(file_path)
+            ds_crs_epsg = gdf.crs.to_epsg()
+        except Exception as e:
+            try:
+                ds = rasterio.open(file_path)
+                ds_crs_epsg=ds.crs.to_epsg()
+            except Exception as e:
+                return False, "Could not read the file", None
+        
+        is_UTM_epsg=check_utm_epsg(ds_crs_epsg)
+
+        if is_UTM_epsg:
+            return False,"Input file is already in UTM Projection", None
+        else:
+            bbox  = ds.bounds
+            success,best_epsg,utm_crs_list=utm_epsg_finder(ds_crs_epsg,bbox)
+            if success==True:
+                return True,"success", {"best_epsg":best_epsg,"utm_crs_list": utm_crs_list}  #c['best_epsg']
+    except Exception as e:
+        return False, str(e), None
+    
+
+def raster_projection(file_path, out_path,dest_utm_epsg):
     """
         Reproject the raster dataset to UTM if necessary.
     """
     try:
         ds = rasterio.open(file_path)
+        
         #check raster crs and reproject if necessary
         ds_crs_epsg=ds.crs.to_epsg()
-        is_UTM_epsg=check_utm_epsg(ds_crs_epsg)
+        
+        if dst_utm_epsg:
+            is_UTM_epsg=check_utm_epsg(int(dst_utm_epsg))
+            if not is_UTM_epsg:
+                return False, "Invalid input dest_utm_epsg"
+        else:
+            is_UTM_epsg=check_utm_epsg(ds_crs_epsg)
 
-        if not is_UTM_epsg:
-            bbox  = ds.bounds
-            success,dst_utm_epsg,utm_crs_list=utm_epsg_finder(ds_crs_epsg,bbox)
-            if not success:
-                error=str(dst_utm_epsg)
-                return False, f"Error in finding utm: {error}"
+            if not is_UTM_epsg:
+                bbox  = ds.bounds
+                success,dst_utm_epsg,utm_crs_list=utm_epsg_finder(ds_crs_epsg,bbox)
+                if not success:
+                    error=str(dst_utm_epsg)
+                    return False, f"Error in finding utm: {error}"
             
             src_crs=CRS.from_epsg(ds_crs_epsg) 
             dst_crs = CRS.from_epsg(dst_utm_epsg) 
